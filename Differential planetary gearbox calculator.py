@@ -163,8 +163,18 @@ try:
         print('Calculation finished.')
        # Create DataFrame from the list
         solutions_df = pd.DataFrame(solutions)
-        subset_solutions_df = solutions_df[(solutions_df['zs2id'] >= 20)].sort_values(by='grsp1')
-        print(subset_solutions_df.to_string())
+        # choose the subset based on the sun gear diameter 
+        solutions_df = solutions_df[(solutions_df['zs2id'] >= 20)]
+        # eliminate scale duplicates
+        solutions_df.sort_values(by='m1')
+        # Step 2: Define subset columns (all except 'm1')
+        subset_cols = [col for col in solutions_df.columns if col != 'm1' and col != 'm2' and col != 'zs2id']
+        # Step 3: Drop duplicates on subset, keep first (min m1)
+        solutions_df = solutions_df.drop_duplicates(subset=subset_cols).reset_index(drop=True)
+        
+        # sort the values by the gear ratio of the input on gear to the planets
+        solutions_df = solutions_df.sort_values(by='grsp1')
+        print(solutions_df.to_string())
 except Exception as e:
     import traceback
     print(f"Error type: {type(e).__name__}")
