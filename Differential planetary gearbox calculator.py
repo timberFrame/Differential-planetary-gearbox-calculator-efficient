@@ -17,80 +17,150 @@ Equations that rule this gearbox:
  zr2 = zr1*k+np
 
 '''
+import pandas as pd
+import math
+
+def max_planets(zs, zp):
+    return math.floor(math.pi * (1 + zs / zp))
 
 #Welcome and instructions:
 print('''************************************************
 *   Differential planetary gearbox calculator  *
 *      By Juan Gg                              *
 ************************************************''')
+
 #Input parameters:
-while True:
-    try:
-        print('>>> Enter parameters:')
-        od = float(input(' Outside diameter: '))
-        mtr = float(input(' Min target ratio: '))
-        Mtr = float(input(' Max target ratio: '))
-        mt = int(input(' Min number of teeth: '))
-        mm = float(input(' Min teeth module: '))
-        mp = int(input(' Min number of planets: '))
-        Mp = int(input(' Max number of planets: '))
-        if mp > Mp:     #Min number of planets can not be bigger than max number.
-            print('  Wrong input!   Try again')
-            continue
-        if input(' Proceed to calculation? (yes/no): ') == 'yes':
-            print('')
-            print(' Please wait, it may take several minutes...')
-    
-#Perform the calculation by trying all posible combinations and showing the "right" ones:
-            r = 0
-            for np in range(mp,Mp+1):
-                k = 0
-                while k<= 100:
-                    for zs1m in range(0,200):
-                        for zr1m in range(zs1m,200):
-                            zs1 = np*zs1m
-                            zr1 = np*zr1m
-                            zp1 = (zr1-zs1)/2
-                            zr2 = zr1*k+np
-                            zp2 = zp1*k
-                            zs2 = zr2-2*zp2
-                            m1 = round(od/(zr1+2),6)
-                            m2 = round((m1*(zp1+zs1))/(zp2+zs2),6)
-                            #Verify that the restrictions apply and that all teeth numbers are integrers.
-                            if zr1>=mt and zp1>=mt and zs1>=mt and zr2>=mt and zp2>=mt and zs2>=mt and m1>=mm and m2>=mm and abs(round(zr1)-zr1)<0.01 and abs(round(zp1)-zp1)<0.01 and abs(round(zs1)-zs1)<0.01 and abs(round(zr2)-zr2)<0.01 and abs(round(zp2)-zp2)<0.01 and abs(round(zs2)-zs2)<0.01:
-                                #Rounding is to compensate errors in operations. Only rounds numbers closer than 0.01 to the nearest integrer
-                                zr1 = round(zr1)
-                                zp1 = round(zp1)
-                                zs1 = round(zs1)
-                                zr2 = round(zr2)
-                                zp2 = round(zp2)
-                                zs2 = round(zs2)
-                                gr = round(1/((1-(zr1*zp2)/(zr2*zp1))/(1+(zr1/zs1))),6)
-                                #Calculate final gear ratio and verify that is between min and max specified
-                                if mtr<=gr<=Mtr:
-                                    r = r+1
-                                    #Print the result
-                                    print('')
-                                    print('')
-                                    print(' Result__________________'+str(r))
-                                    print('')
-                                    print('  GR :  '+str(gr))
-                                    print('  np :  '+str(np))
-                                    print('  zr1:  '+str(zr1))
-                                    print('  zp1:  '+str(zp1))
-                                    print('  zs1:  '+str(zs1))
-                                    print('  m1 :  '+str(m1))
-                                    print('  zr2:  '+str(zr2))
-                                    print('  zp2:  '+str(zp2))
-                                    print('  zs2:  '+str(zs2))
-                                    print('  m2 :  '+str(m2))
-                                    print('')
-                                    print('')
-                    k = k+0.1
-            if input('Calculation finished. Do you want to try again?(yes/no)')!='yes':
-                print('Good bye!')
-                break
-            else:
-                continue
-    except:
+try:
+    print('>>> Enter parameters:')
+    od = float(input(' Outside diameter: '))
+    mtr = float(input(' Min target ratio: '))
+    Mtr = float(input(' Max target ratio: '))
+    mt = int(input(' Min number of teeth: '))
+    mm = float(input(' Min teeth module: '))
+    mp = int(input(' Min number of planets: '))
+    Mp = int(input(' Max number of planets: '))
+    if mp > Mp:     #Min number of planets can not be bigger than max number.
         print('  Wrong input!   Try again')
+
+
+    if input(' Proceed to calculation? (y/n): ').lower() == 'y':
+        print('')
+        print(' Please wait, it may take several minutes...')
+        print('Results: ',end="")
+        solutions = []
+        r = 0
+        
+        # Precompute global max for zr1 based on od and mm
+        max_zr1 = math.floor(od / mm - 2)
+        if max_zr1 < 3 * mt:  # Impossible if max_zr1 too small
+            print('No feasible solutions: od too small for mm and mt.')
+        else:
+            for np in range(mp, Mp + 1):
+                # Per-np bounds for zs1m and zr1m
+                min_zs1m = math.ceil(mt / np)
+                max_zs1m = math.floor((max_zr1 - 2 * mt) / np)  # zr1 = zs1 + 2*zp1 >= zs1 + 2*mt
+                if min_zs1m > max_zs1m:
+                    continue  # No feasible zs1 for this np
+                
+                max_zr1m = math.floor(max_zr1 / np)
+                min_delta_m = math.ceil(2 * mt / np)  # Minimum for zr1m - zs1m to make zp1 >= mt
+                
+                k = 0  # Reset k, but we'll limit it per inner config
+                for zs1m in range(min_zs1m, max_zs1m + 1):
+                    min_zr1m = max(zs1m + min_delta_m, zs1m + 1)  # zr1 > zs1
+                    for zr1m in range(min_zr1m, max_zr1m + 1):
+                        diff_m = zr1m - zs1m
+                        # Early prune: Ensure zp1 will be integer (np * diff_m must be even)
+                        if (np * diff_m) % 2 != 0:
+                            continue
+                        
+                        # Now compute integers directly
+                        zs1 = np * zs1m
+                        zr1 = np * zr1m
+                        zp1 = (zr1 - zs1) // 2  # Integer division, safe due to modulo check
+                        
+                        # Early module check for stage 1
+                        m1 = od / (zr1 + 2)
+                        if m1 < mm:
+                            continue  # Too many teeth for od
+                        
+                        # Early planet feasibility check
+                        max_np_possible = min(max_planets(zs1, zp1), max_planets(0, 0))  # Placeholder; update zs2 later
+                        if np > max_planets(zs1, zp1):
+                            continue
+                        
+                        # Now bound k using simplified gr equation
+                        # gr = R * (1 + k * (zr1 / np)), where R = 1 + zr1 / zs1
+                        R = 1 + zr1 / zs1
+                        if R <= 0:  # Degenerate
+                            continue
+                        
+                        # Solve for k range that hits [mtr, Mtr]
+                        k_factor = zr1 / np
+                        k_min = max(0.0, (mtr / R - 1) / k_factor) if k_factor > 0 else 0.0
+                        k_max = (Mtr / R - 1) / k_factor if k_factor > 0 else 0.0
+                        if k_min > k_max + 1e-6:  # No overlap
+                            continue
+                        
+                        # Loop k only in feasible range, step 0.1
+                        k_start = math.ceil(k_min * 10) / 10.0
+                        k_end = math.floor(k_max * 10) / 10.0
+                        num_k_steps = int((k_end - k_start) * 10) + 1
+                        if num_k_steps <= 0:
+                            continue
+                        
+                        for i in range(num_k_steps + 1):
+                            k = k_start + i * 0.1
+                            
+                            # Compute stage 2 teeth (as floats first)
+                            zr2 = k * zr1 + np
+                            zp2 = k * zp1
+                            zs2 = k * zs1 + np  # Derived: zs2 = zr2 - 2*zp2 = k*zs1 + np
+                            
+                            # Module for stage 2 (using the relation)
+                            denom = k * (zp1 + zs1) + np
+                            if denom <= 0:
+                                continue
+                            m2 = m1 * (zp1 + zs1) / denom
+                            
+                            # Verify integers with tolerance (as original)
+                            if (zr1 >= mt and zp1 >= mt and zs1 >= mt and
+                                zr2 >= mt and zp2 >= mt and zs2 >= mt and
+                                m1 >= mm and m2 >= mm and
+                                abs(round(zr2) - zr2) < 0.01 and abs(round(zp2) - zp2) < 0.01 and
+                                abs(round(zs2) - zs2) < 0.01):
+                                
+                                # Round to integers
+                                zr1_r = round(zr1)  # Already integer, but for consistency
+                                zp1_r = round(zp1)
+                                zs1_r = round(zs1)
+                                zr2_r = round(zr2)
+                                zp2_r = round(zp2)
+                                zs2_r = round(zs2)
+                                
+                                # Gear ratio
+                                gr = 1 / ((1 - (zr1_r * zp2_r) / (zr2_r * zp1_r)) / (1 + (zr1_r / zs1_r)))
+                                gr = round(gr, 6)
+                                grsp1 = round(zp1_r / zs1_r, 1)
+                                
+                                # Final checks (as original)
+                                if mtr <= gr <= Mtr and np <= max_planets(zs1_r, zp1_r) and np <= max_planets(zs2_r, zp2_r):
+                                    r += 1
+                                    print(r, end=",")
+                                    
+                                    # Store (as original, using rounded values)
+                                    solutions.append({
+                                        'GR': round(gr, 1), 'np': np, 'zr1': zr1_r, 'zp1': zp1_r, 'zs1': zs1_r,
+                                        'grsp1': grsp1, 'm1': round(m1, 3), 'zr2': zr2_r, 'zp2': zp2_r,
+                                        'zs2': zs2_r, 'm2': round(m2, 3), 'zs2id': round(m2 * (zs2_r - 1.25) - 8, 1)
+                                    })
+                
+                # End k outer (but now it's inner; no need for while k<=100)
+    
+        print('Calculation finished.')
+       # Create DataFrame from the list
+        solutions_df = pd.DataFrame(solutions)
+        subset_solutions_df = solutions_df[(solutions_df['zs2id'] >= 20)].sort_values(by='grsp1')
+        print(subset_solutions_df.to_string())
+except:
+    print('  Wrong input!   Try again')
